@@ -1,6 +1,6 @@
 [package]
 name = "json-colorizer"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A fast, lightweight JSON formatter, pretty-printer, colorizer, and query tool for Rust — with jq-style dot-path queries"
 license = "MIT"
