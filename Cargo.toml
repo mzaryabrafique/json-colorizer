@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["json", "formatter", "colorize", "pretty-print", "query"]
 categories = ["command-line-utilities", "encoding", "development-tools"]
-repository = "https://github.com/zaryab/json-colorizer"
+repository = "https://github.com/mzaryabrafique/cli-json-formater"
 documentation = "https://docs.rs/json-colorizer"
 homepage = "https://crates.io/crates/json-colorizer"
 
