@@ -1,8 +1,8 @@
 use clap::Parser;
-use json_colorizer::{format_json, format_json_compact, query, FormatOptions};
+use json_colorizer::{format_json, format_json_compact, query, FormatOptions, Theme};
 use serde_json::Value;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, IsTerminal};
 use std::process;
 
 /// jfmt — A CLI JSON formatter & colorizer
@@ -18,6 +18,18 @@ struct Args {
     /// Query a value using dot-path notation (e.g. .data.users[0].name)
     #[arg(short, long)]
     query: Option<String>,
+
+    /// Sort object keys alphabetically
+    #[arg(short = 'S', long)]
+    sort_keys: bool,
+
+    /// Raw output (omit quotes for strings, print multiple results on new lines)
+    #[arg(short = 'r', long)]
+    raw: bool,
+
+    /// Indentation size
+    #[arg(short = 'i', long, default_value = "2")]
+    indent: usize,
 
     /// Optional file path to read JSON from (reads stdin if omitted)
     file: Option<String>,
@@ -43,30 +55,52 @@ fn main() {
     };
 
     if input.trim().is_empty() {
-        eprintln!("error: no input provided");
-        process::exit(1);
+        return;
     }
 
-    // ── Parse JSON ──────────────────────────────────────────────
-    let value: Value = serde_json::from_str(&input).unwrap_or_else(|e| {
-        eprintln!("error: invalid JSON: {}", e);
-        process::exit(1);
-    });
+    // ── Process Input (NDJSON support) ──────────────────────────
+    let stream = serde_json::Deserializer::from_str(&input).into_iter::<Value>();
 
-    // ── Apply query (if any) ────────────────────────────────────
-    let target = match &args.query {
-        Some(q) => query(&value, q).unwrap_or_else(|e| {
-            eprintln!("error: {}", e);
+    for (obj_idx, value_res) in stream.enumerate() {
+        let value = value_res.unwrap_or_else(|e| {
+            eprintln!("error: invalid JSON (object {}): {}", obj_idx + 1, e);
             process::exit(1);
-        }),
-        None => &value,
-    };
+        });
 
-    // ── Output ──────────────────────────────────────────────────
-    if args.compact {
-        println!("{}", format_json_compact(target));
-    } else {
-        let opts = FormatOptions::default();
-        println!("{}", format_json(target, &opts));
+        // ── Apply query (if any) ────────────────────────────────────
+        let results = match &args.query {
+            Some(q) => query(&value, q).unwrap_or_else(|e| {
+                eprintln!("error: {}", e);
+                process::exit(1);
+            }),
+            None => vec![&value],
+        };
+
+        // ── Output ──────────────────────────────────────────────────
+        let opts = FormatOptions {
+            indent: args.indent,
+            color: if args.raw { false } else { io::stdout().is_terminal() },
+            sort_keys: args.sort_keys,
+            theme: Theme::default(),
+        };
+
+        for (res_idx, res) in results.iter().enumerate() {
+            if args.raw {
+                if let Some(s) = res.as_str() {
+                    println!("{}", s);
+                } else {
+                    println!("{}", format_json_compact(res));
+                }
+            } else if args.compact {
+                println!("{}", format_json_compact(res));
+            } else {
+                // If multiple results and not raw, maybe separate them?
+                // jq prints them on new lines.
+                if results.len() > 1 && res_idx > 0 {
+                    // println!(); // Add newline between results?
+                }
+                println!("{}", format_json(res, &opts));
+            }
+        }
     }
 }
